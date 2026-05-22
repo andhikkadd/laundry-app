@@ -1,0 +1,34 @@
+steps:
+  # 1. Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/bilasin:$COMMIT_SHA'
+      - '.'
+
+  # 2. Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/bilasin:$COMMIT_SHA'
+
+  # 3. Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'bilasin'
+      - '--image=$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/bilasin:$COMMIT_SHA'
+      - '--region=$_RUN_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+images:
+  - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/bilasin:$COMMIT_SHA'
+
+substitutions:
+  _AR_REGION: 'asia-southeast2' # Default for Indonesia / Jakarta
+  _AR_REPO: 'bilasin-repo'
+  _RUN_REGION: 'asia-southeast2'

@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-dark: #0f172a;
+  --color-emerald-brand: #10b981;
+  --color-amber-brand: #f59e0b;
+  --color-light-bg: #f8fafc;
+  --color-text-dark: #111827;
+  --color-text-muted: #64748b;
+  --color-border-brand: #e2e8f0;
+
+  --animate-slide-in: slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes slide-in {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+}
+
+
+:root {
+  --background: #f8fafc;
+  --foreground: #111827;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Print receipt/report overrides */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Prevent layout clipping by forcing all scroll containers to show overflow */
+  body.print-receipt-mode,
+  body.print-receipt-mode * {
+    overflow: visible !important;
+  }
+
+  /* Hide all elements on the page by default */
+  body * {
+    visibility: hidden !important;
+  }
+  /* Show only the active print mode container and its contents */
+  body.print-receipt-mode #print-receipt-area,
+  body.print-receipt-mode #print-receipt-area * {
+    visibility: visible !important;
+  }
+  body.print-report-mode #print-report-area,
+  body.print-report-mode #print-report-area * {
+    visibility: visible !important;
+  }
+
+  /* Layout and positioning for printable containers */
+  #print-receipt-area {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: white !important;
+    z-index: 99999999 !important;
+  }
+
+  #print-report-area {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white;
+  }
+
+  /* Report printing styling */
+  #print-report-area {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    color: #1e293b !important;
+  }
+  #print-report-area table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  #print-report-area th, #print-report-area td {
+    border-bottom: 1px solid #e2e8f0 !important;
+    padding: 8px 12px !important;
+  }
+}

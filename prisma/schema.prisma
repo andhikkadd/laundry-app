@@ -1,0 +1,148 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+}
+
+enum OrderStatus {
+  QUEUED
+  PROCESSING
+  READY
+  PICKED_UP
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  QRIS
+  EWALLET
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum NotificationType {
+  SYSTEM
+  WHATSAPP
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
+model Service {
+  id                    String   @id @default(uuid())
+  name                  String
+  slug                  String   @unique
+  pricePerKg            Float
+  baseDurationMinutes   Int
+  durationPerKgMinutes  Int
+  isExpress             Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  unit                  String   @default("KG")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  orders                Order[]
+}
+
+model Order {
+  id                       String          @id @default(uuid())
+  orderCode                String          @unique
+  customerId               String
+  serviceId                String
+  weightKg                 Float
+  pricePerKg               Float
+  totalPrice               Float
+  paymentStatus            PaymentStatus   @default(UNPAID)
+  paymentMethod            PaymentMethod   @default(CASH)
+  status                   OrderStatus     @default(QUEUED)
+  queueNumber              Int
+  estimatedDurationMinutes Int
+  estimatedStartAt         DateTime
+  estimatedEndAt           DateTime
+  actualStartAt            DateTime?
+  actualEndAt              DateTime?
+  readyAt                  DateTime?
+  pickedUpAt               DateTime?
+  notes                    String?
+  machineNumber            Int?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  customer                 Customer        @relation(fields: [customerId], references: [id])
+  service                  Service         @relation(fields: [serviceId], references: [id])
+  payments                 Payment[]
+  statusLogs               OrderStatusLog[]
+  notifications            Notification[]
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  orderId   String
+  amount    Float
+  method    PaymentMethod
+  status    PaymentStatus @default(UNPAID)
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderStatusLog {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String             @id @default(uuid())
+  orderId   String
+  type      NotificationType   @default(SYSTEM)
+  target    String?
+  message   String
+  status    NotificationStatus @default(PENDING)
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+  order     Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
