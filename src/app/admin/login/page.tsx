@@ -59,7 +59,8 @@ export default function AdminLoginPage() {
                   name="email"
                   id="email"
                   required
-                  className="block w-full rounded-xl border border-slate-750 bg-slate-900 py-3.5 pl-10 pr-3 text-sm text-white focus:border-emerald-brand focus:outline-hidden transition-colors"
+                  placeholder="kasir@laundry.com"
+                  className="block w-full rounded-xl border border-slate-750 bg-slate-900 py-3.5 pl-10 pr-3 text-sm text-white placeholder-slate-600 focus:border-emerald-brand focus:outline-hidden transition-colors"
                 />
               </div>
             </div>
