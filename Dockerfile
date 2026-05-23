@@ -1,6 +1,6 @@
 # Stage 1: Install dependencies
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -25,6 +25,7 @@ ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
+RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
