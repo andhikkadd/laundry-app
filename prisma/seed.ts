@@ -73,170 +73,135 @@ async function main() {
   }
   console.log('Settings seeded');
 
-  // 5. Sample Customers
-  const customer1 = await prisma.customer.create({
-    data: {
-      name: 'Budi Santoso',
-      phone: '081299998888',
-    },
-  });
+  // 5. Sample Customers (Varied & Funny Names)
+  const funnyNames = [
+    'Ucup', 'Naruto Uzumaki', 'Ryan Gosling', 'Tok Dalang Ranggi', 
+    'Fufufafa', 'Asep Knalpot', 'Budi Gaming', 'Siti Badriah', 
+    'Elon Musk', 'Mamang Racing', 'Tony Stark', 'Patrick Star', 
+    'Mbak Taylor', 'Kang Galon', 'Joko Mancing', 'Neng Siti',
+    'Mas Pur', 'Lord Janda', 'Teh Ninih', 'Gojo Satoru'
+  ];
 
-  const customer2 = await prisma.customer.create({
-    data: {
-      name: 'Siti Rahma',
-      phone: '085711112222',
-    },
-  });
+  const dbCustomers = [];
+  for (let i = 0; i < funnyNames.length; i++) {
+    const cust = await prisma.customer.create({
+      data: {
+        name: funnyNames[i],
+        phone: `0812${Math.floor(Math.random() * 90000000 + 10000000)}`,
+      },
+    });
+    dbCustomers.push(cust);
+  }
+  console.log('Customers seeded with natural/funny names');
 
-  const customer3 = await prisma.customer.create({
-    data: {
-      name: 'Ahmad Faisal',
-      phone: '087833334444',
-    },
-  });
-  console.log('Customers seeded');
-
-  // 6. Sample Orders
+  // 6. Generate Realistic Historical Orders (Last 14 Days)
   const today = new Date();
-  const dateStr = today.getFullYear().toString() + 
-                  (today.getMonth() + 1).toString().padStart(2, '0') + 
-                  today.getDate().toString().padStart(2, '0');
+  let orderCounter = 1;
 
-  // Order 1: Completed
-  const weight1 = 2.5;
-  const totalPrice1 = weight1 * regularService.pricePerKg;
-  const duration1 = regularService.baseDurationMinutes + Math.round(weight1 * regularService.durationPerKgMinutes);
-  const start1 = new Date(today.getTime() - 24 * 60 * 60 * 1000); // 1 day ago
-  const end1 = new Date(start1.getTime() + duration1 * 60000);
+  for (let i = 14; i >= 0; i--) {
+    const currentDay = new Date(today);
+    currentDay.setDate(today.getDate() - i);
+    currentDay.setHours(8, 0, 0, 0); // Start at 8 AM
 
-  const order1 = await prisma.order.create({
-    data: {
-      orderCode: `LDY-${dateStr}-0001`,
-      customerId: customer1.id,
-      serviceId: regularService.id,
-      weightKg: weight1,
-      pricePerKg: regularService.pricePerKg,
-      totalPrice: totalPrice1,
-      paymentStatus: PaymentStatus.PAID,
-      paymentMethod: PaymentMethod.CASH,
-      status: OrderStatus.PICKED_UP,
-      queueNumber: 1,
-      estimatedDurationMinutes: duration1,
-      estimatedStartAt: start1,
-      estimatedEndAt: end1,
-      actualStartAt: start1,
-      actualEndAt: end1,
-      readyAt: end1,
-      pickedUpAt: new Date(end1.getTime() + 2 * 60 * 60 * 1000), // picked up 2 hours later
-      notes: 'No hangers needed',
-      createdAt: start1,
-    },
-  });
+    const dateStr = currentDay.getFullYear().toString() + 
+                    (currentDay.getMonth() + 1).toString().padStart(2, '0') + 
+                    currentDay.getDate().toString().padStart(2, '0');
 
-  await prisma.payment.create({
-    data: {
-      orderId: order1.id,
-      amount: totalPrice1,
-      method: PaymentMethod.CASH,
-      status: PaymentStatus.PAID,
-      paidAt: start1,
-      createdAt: start1,
-    },
-  });
+    // Random number of orders per day (4 to 12), more on weekends
+    const isWeekend = currentDay.getDay() === 0 || currentDay.getDay() === 6;
+    const numOrders = isWeekend ? Math.floor(Math.random() * 8) + 8 : Math.floor(Math.random() * 6) + 4;
 
-  await prisma.orderStatusLog.createMany({
-    data: [
-      { orderId: order1.id, status: OrderStatus.QUEUED, createdAt: start1, note: 'Order created' },
-      { orderId: order1.id, status: OrderStatus.PROCESSING, createdAt: start1, note: 'Started washing' },
-      { orderId: order1.id, status: OrderStatus.READY, createdAt: end1, note: 'Ready for pickup' },
-      { orderId: order1.id, status: OrderStatus.PICKED_UP, createdAt: new Date(end1.getTime() + 2 * 60 * 60 * 1000), note: 'Picked up by customer' },
-    ],
-  });
+    for (let j = 0; j < numOrders; j++) {
+      const isExpress = Math.random() > 0.7;
+      const service = isExpress ? expressService : regularService;
+      const weight = Math.round((Math.random() * 7 + 1) * 10) / 10; // 1.0 to 8.0 kg
+      const totalPrice = weight * service.pricePerKg;
+      const duration = service.baseDurationMinutes + Math.round(weight * service.durationPerKgMinutes);
+      
+      // Order created randomly during the day (8 AM to 7 PM)
+      const orderTime = new Date(currentDay.getTime() + Math.random() * 11 * 60 * 60 * 1000);
+      const endEst = new Date(orderTime.getTime() + duration * 60000);
 
-  // Order 2: Processing
-  const weight2 = 3.0;
-  const totalPrice2 = weight2 * regularService.pricePerKg;
-  const duration2 = regularService.baseDurationMinutes + Math.round(weight2 * regularService.durationPerKgMinutes);
-  const start2 = new Date(today.getTime() - 30 * 60 * 1000); // 30 mins ago
-  const end2 = new Date(start2.getTime() + duration2 * 60000);
+      // Determine status based on probability and how old the order is
+      let status = OrderStatus.PICKED_UP;
+      let paymentStatus = PaymentStatus.PAID;
+      
+      const randCancel = Math.random();
+      if (randCancel < 0.05) {
+        // 5% chance order was cancelled
+        status = OrderStatus.CANCELLED;
+        paymentStatus = Math.random() > 0.5 ? PaymentStatus.UNPAID : PaymentStatus.REFUNDED;
+      } else if (i === 0) { 
+        // Today's active orders
+        const rand = Math.random();
+        if (rand < 0.25) status = OrderStatus.QUEUED;
+        else if (rand < 0.55) status = OrderStatus.PROCESSING;
+        else if (rand < 0.85) status = OrderStatus.READY;
+        else status = OrderStatus.PICKED_UP;
+        
+        if (status === OrderStatus.QUEUED && Math.random() > 0.4) {
+          paymentStatus = PaymentStatus.UNPAID;
+        }
+      }
 
-  const order2 = await prisma.order.create({
-    data: {
-      orderCode: `LDY-${dateStr}-0002`,
-      customerId: customer2.id,
-      serviceId: regularService.id,
-      weightKg: weight2,
-      pricePerKg: regularService.pricePerKg,
-      totalPrice: totalPrice2,
-      paymentStatus: PaymentStatus.PAID,
-      paymentMethod: PaymentMethod.QRIS,
-      status: OrderStatus.PROCESSING,
-      queueNumber: 2,
-      estimatedDurationMinutes: duration2,
-      estimatedStartAt: start2,
-      estimatedEndAt: end2,
-      actualStartAt: start2,
-      notes: 'Fragile fabric, gentle wash',
-      createdAt: start2,
-    },
-  });
+      const paymentMethod = Math.random() > 0.4 ? PaymentMethod.QRIS : PaymentMethod.CASH;
+      const customer = dbCustomers[Math.floor(Math.random() * dbCustomers.length)];
 
-  await prisma.payment.create({
-    data: {
-      orderId: order2.id,
-      amount: totalPrice2,
-      method: PaymentMethod.QRIS,
-      status: PaymentStatus.PAID,
-      paidAt: start2,
-      createdAt: start2,
-    },
-  });
+      const order = await prisma.order.create({
+        data: {
+          orderCode: `LDY-${dateStr}-${orderCounter.toString().padStart(4, '0')}`,
+          customerId: customer.id,
+          serviceId: service.id,
+          weightKg: weight,
+          pricePerKg: service.pricePerKg,
+          totalPrice,
+          paymentStatus,
+          paymentMethod,
+          status,
+          queueNumber: orderCounter,
+          estimatedDurationMinutes: duration,
+          estimatedStartAt: orderTime,
+          estimatedEndAt: endEst,
+          actualStartAt: (status !== OrderStatus.QUEUED && status !== OrderStatus.CANCELLED) ? orderTime : null,
+          actualEndAt: (status === OrderStatus.READY || status === OrderStatus.PICKED_UP) ? endEst : null,
+          readyAt: (status === OrderStatus.READY || status === OrderStatus.PICKED_UP) ? endEst : null,
+          pickedUpAt: status === OrderStatus.PICKED_UP ? new Date(endEst.getTime() + (Math.random() * 5 + 1) * 60 * 60 * 1000) : null,
+          notes: Math.random() > 0.85 ? 'Tolong setrika yg rapi ya mang' : null,
+          createdAt: orderTime,
+        },
+      });
 
-  await prisma.orderStatusLog.createMany({
-    data: [
-      { orderId: order2.id, status: OrderStatus.QUEUED, createdAt: start2, note: 'Order created' },
-      { orderId: order2.id, status: OrderStatus.PROCESSING, createdAt: start2, note: 'Started washing' },
-    ],
-  });
+      if (paymentStatus === PaymentStatus.PAID || paymentStatus === PaymentStatus.REFUNDED) {
+        await prisma.payment.create({
+          data: {
+            orderId: order.id,
+            amount: totalPrice,
+            method: paymentMethod,
+            status: paymentStatus,
+            paidAt: orderTime,
+            createdAt: orderTime,
+          },
+        });
+      }
 
-  // Order 3: Queued
-  const weight3 = 1.5;
-  const totalPrice3 = weight3 * expressService.pricePerKg;
-  const duration3 = expressService.baseDurationMinutes + Math.round(weight3 * expressService.durationPerKgMinutes);
-  // starts when order 2 ends (based on single queue estimation logic)
-  const start3 = end2;
-  const end3 = new Date(start3.getTime() + duration3 * 60000);
+      // Create realistic logs
+      const logs = [{ orderId: order.id, status: OrderStatus.QUEUED, createdAt: orderTime, note: 'Pesanan masuk antrean' }];
+      
+      if (status === OrderStatus.CANCELLED) {
+        logs.push({ orderId: order.id, status: OrderStatus.CANCELLED, createdAt: new Date(orderTime.getTime() + 600000), note: 'Dibatalkan oleh pelanggan' });
+      } else {
+        if (status !== OrderStatus.QUEUED) logs.push({ orderId: order.id, status: OrderStatus.PROCESSING, createdAt: new Date(orderTime.getTime() + 5000), note: 'Mulai dicuci' });
+        if (status === OrderStatus.READY || status === OrderStatus.PICKED_UP) logs.push({ orderId: order.id, status: OrderStatus.READY, createdAt: endEst, note: 'Selesai dan siap diambil' });
+        if (status === OrderStatus.PICKED_UP) logs.push({ orderId: order.id, status: OrderStatus.PICKED_UP, createdAt: new Date(endEst.getTime() + 2 * 60 * 60 * 1000), note: 'Telah diambil pelanggan' });
+      }
 
-  const order3 = await prisma.order.create({
-    data: {
-      orderCode: `LDY-${dateStr}-0003`,
-      customerId: customer3.id,
-      serviceId: expressService.id,
-      weightKg: weight3,
-      pricePerKg: expressService.pricePerKg,
-      totalPrice: totalPrice3,
-      paymentStatus: PaymentStatus.UNPAID,
-      paymentMethod: PaymentMethod.TRANSFER,
-      status: OrderStatus.QUEUED,
-      queueNumber: 3,
-      estimatedDurationMinutes: duration3,
-      estimatedStartAt: start3,
-      estimatedEndAt: end3,
-      notes: 'Express service requested',
-      createdAt: today,
-    },
-  });
+      await prisma.orderStatusLog.createMany({ data: logs });
 
-  await prisma.orderStatusLog.create({
-    data: {
-      orderId: order3.id,
-      status: OrderStatus.QUEUED,
-      createdAt: today,
-      note: 'Order created, waiting in queue',
-    },
-  });
+      orderCounter++;
+    }
+  }
 
-  console.log('Sample orders seeded');
+  console.log(`Generated ${orderCounter - 1} realistic historical orders for charts.`);
   console.log('Database seeding finished successfully!');
 }
 
