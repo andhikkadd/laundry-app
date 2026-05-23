@@ -185,7 +185,7 @@ async function main() {
       }
 
       // Create realistic logs
-      const logs = [{ orderId: order.id, status: OrderStatus.QUEUED, createdAt: orderTime, note: 'Pesanan masuk antrean' }];
+      const logs: any[] = [{ orderId: order.id, status: OrderStatus.QUEUED, createdAt: orderTime, note: 'Pesanan masuk antrean' }];
       
       if (status === OrderStatus.CANCELLED) {
         logs.push({ orderId: order.id, status: OrderStatus.CANCELLED, createdAt: new Date(orderTime.getTime() + 600000), note: 'Dibatalkan oleh pelanggan' });
