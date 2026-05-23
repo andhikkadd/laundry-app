@@ -12,9 +12,25 @@ export default async function AdminQueuePage() {
     getSettings(),
   ]);
 
-  // Filter orders for active states
-  const queued = allOrders.filter((o) => o.status === OrderStatus.QUEUED);
-  const processing = allOrders.filter((o) => o.status === OrderStatus.PROCESSING);
+  // Filter orders for active states (excluding unpaid cashless orders)
+  const queued = allOrders.filter((o) => {
+    const isCashlessUnpaid =
+      (o.paymentMethod === 'QRIS' ||
+        o.paymentMethod === 'TRANSFER' ||
+        o.paymentMethod === 'EWALLET') &&
+      o.paymentStatus === 'UNPAID';
+    return o.status === OrderStatus.QUEUED && !isCashlessUnpaid;
+  });
+
+  const processing = allOrders.filter((o) => {
+    const isCashlessUnpaid =
+      (o.paymentMethod === 'QRIS' ||
+        o.paymentMethod === 'TRANSFER' ||
+        o.paymentMethod === 'EWALLET') &&
+      o.paymentStatus === 'UNPAID';
+    return o.status === OrderStatus.PROCESSING && !isCashlessUnpaid;
+  });
+
   const ready = allOrders.filter((o) => o.status === OrderStatus.READY);
 
   return (

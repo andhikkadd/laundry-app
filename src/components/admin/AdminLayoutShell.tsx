@@ -8,9 +8,11 @@ import { usePathname } from 'next/navigation';
 interface AdminLayoutShellProps {
   children: React.ReactNode;
   adminName: string;
+  adminEmail: string;
+  outletName: string;
 }
 
-export default function AdminLayoutShell({ children, adminName }: AdminLayoutShellProps) {
+export default function AdminLayoutShell({ children, adminName, adminEmail, outletName }: AdminLayoutShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
 
@@ -33,13 +35,13 @@ export default function AdminLayoutShell({ children, adminName }: AdminLayoutShe
     if (pathname.startsWith('/admin/services')) return 'Daftar Layanan';
     if (pathname.startsWith('/admin/reports')) return 'Laporan Keuangan';
     if (pathname.startsWith('/admin/settings')) return 'Pengaturan Outlet';
-    return 'Bilasin Admin';
+    return outletName || 'Bilasin Admin';
   };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-light-bg">
       {/* Sidebar */}
-      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} outletName={outletName} />
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -48,6 +50,7 @@ export default function AdminLayoutShell({ children, adminName }: AdminLayoutShe
           title={getPageTitle()}
           onOpenSidebar={() => setSidebarOpen(true)}
           adminName={adminName}
+          adminEmail={adminEmail}
         />
 
         {/* Content Wrapper */}

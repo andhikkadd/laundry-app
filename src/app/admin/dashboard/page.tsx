@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import DashboardCard from '@/components/admin/DashboardCard';
 import StatusBadge from '@/components/ui/StatusBadge';
-import PaymentBadge from '@/components/ui/PaymentBadge';
 import { getDashboardStats } from '@/actions/orders';
 import { formatPrice, formatDateTime } from '@/lib/format';
 import { OrderStatus } from '@prisma/client';
@@ -22,10 +21,18 @@ export const dynamic = 'force-dynamic';
 export default async function AdminDashboardPage() {
   const stats = await getDashboardStats();
 
-  // Active queue filter (status: QUEUED or PROCESSING)
-  const activeQueue = stats.recentOrders.filter(
-    (o) => o.status === OrderStatus.QUEUED || o.status === OrderStatus.PROCESSING
-  );
+  // Active queue filter (status: QUEUED or PROCESSING, excluding unpaid cashless orders)
+  const activeQueue = stats.recentOrders.filter((o) => {
+    const isCashlessUnpaid =
+      (o.paymentMethod === 'QRIS' ||
+        o.paymentMethod === 'TRANSFER' ||
+        o.paymentMethod === 'EWALLET') &&
+      o.paymentStatus === 'UNPAID';
+    return (
+      (o.status === OrderStatus.QUEUED || o.status === OrderStatus.PROCESSING) &&
+      !isCashlessUnpaid
+    );
+  });
 
   // Calculate maximum revenue for chart scaling
   const maxRevenue = Math.max(...stats.revenueChartData.map((d) => d.revenue), 10000);
@@ -149,7 +156,7 @@ export default async function AdminDashboardPage() {
                       {order.orderCode}
                     </Link>
                     <p className="text-xs text-text-muted">
-                      {order.customer.name} • <span className="font-semibold text-text-dark">{order.weightKg} kg</span>
+                      {order.customer.name} • <span className="font-semibold text-text-dark">{order.weightKg} {order.service.unit === 'ITEM' ? 'item' : 'kg'}</span>
                     </p>
                     <p className="text-[10px] text-text-muted">
                       Selesai: {formatDateTime(order.estimatedEndAt).split(', ')[1]}
@@ -190,13 +197,12 @@ export default async function AdminDashboardPage() {
                   <th className="p-3.5 text-center">BERAT</th>
                   <th className="p-3.5">TOTAL</th>
                   <th className="p-3.5 text-center">STATUS</th>
-                  <th className="p-3.5 text-center">PEMBAYARAN</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.recentOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-4 text-center text-text-muted">
+                    <td colSpan={6} className="p-4 text-center text-text-muted">
                       Belum ada transaksi pesanan laundry.
                     </td>
                   </tr>
@@ -216,13 +222,12 @@ export default async function AdminDashboardPage() {
                       </td>
                       <td className="p-3.5 font-semibold text-text-dark">{order.customer.name}</td>
                       <td className="p-3.5 font-semibold text-text-dark">{order.service.name}</td>
-                      <td className="p-3.5 text-center font-bold text-text-dark">{order.weightKg} kg</td>
+                      <td className="p-3.5 text-center font-bold text-text-dark">
+                        {order.weightKg} {order.service.unit === 'ITEM' ? 'item' : 'kg'}
+                      </td>
                       <td className="p-3.5 font-extrabold text-navy-dark">{formatPrice(order.totalPrice)}</td>
                       <td className="p-3.5 text-center">
                         <StatusBadge status={order.status} />
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <PaymentBadge status={order.paymentStatus} />
                       </td>
                     </tr>
                   ))

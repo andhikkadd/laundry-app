@@ -3,6 +3,14 @@ import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-production-12345';
+
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'super-secret-jwt-key-change-in-production-12345')) {
+  console.warn(
+    '🚨 [SECURITY WARNING]: JWT_SECRET is either missing or using the default fallback key in production! ' +
+    'Please set a strong cryptographically secure JWT_SECRET environment variable in your Google Cloud Run settings to protect admin sessions.'
+  );
+}
+
 const key = new TextEncoder().encode(JWT_SECRET);
 
 export async function middleware(request: NextRequest) {

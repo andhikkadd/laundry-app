@@ -42,8 +42,6 @@ export default function OrderForm({ services }: OrderFormProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [notes, setNotes] = useState('');
 
-  const paymentStatus = paymentMethod === PaymentMethod.CASH ? PaymentStatus.PAID : PaymentStatus.UNPAID;
-
 
   // Calculations state
   const [pricePerKg, setPricePerKg] = useState(0);
@@ -113,7 +111,6 @@ export default function OrderForm({ services }: OrderFormProps) {
         customerPhone: customerPhone || undefined,
         serviceId: selectedServiceId,
         weightKg: w,
-        paymentStatus,
         paymentMethod,
         notes: notes || undefined,
       });

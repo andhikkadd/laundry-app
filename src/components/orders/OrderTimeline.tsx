@@ -7,6 +7,7 @@ interface StatusLog {
   status: OrderStatus;
   createdAt: Date;
   note?: string | null;
+  adminName?: string | null;
 }
 
 interface OrderTimelineProps {
@@ -78,8 +79,17 @@ export default function OrderTimeline({ currentStatus, logs }: OrderTimelineProp
               Pencucian pakaian telah dibatalkan oleh petugas.
             </p>
             {cancelLog && (
-              <div className="mt-3 text-xs text-rose-600">
-                <span className="font-semibold">Waktu Batal:</span> {formatDateTime(cancelLog.createdAt)}
+              <div className="mt-3 text-xs text-rose-600 space-y-2">
+                <div>
+                  <span className="font-semibold">Waktu Batal:</span> {formatDateTime(cancelLog.createdAt)}
+                </div>
+                {cancelLog.adminName && (
+                  <div>
+                    <span className="inline-flex items-center gap-1 rounded bg-rose-100 border border-rose-200 text-[10px] text-rose-700 px-2 py-0.5 font-bold">
+                      Oleh: {cancelLog.adminName}
+                    </span>
+                  </div>
+                )}
                 {cancelLog.note && (
                   <p className="mt-1 font-medium bg-rose-100/50 p-2 rounded-lg italic">
                     &quot;{cancelLog.note}&quot;
@@ -124,14 +134,14 @@ export default function OrderTimeline({ currentStatus, logs }: OrderTimelineProp
                         isDone
                           ? 'bg-emerald-brand text-white'
                           : isCurrent
-                          ? 'bg-amber-brand text-white animate-pulse'
+                          ? 'bg-amber-brand text-white'
                           : 'bg-slate-100 text-slate-400'
                       }`}
                     >
                       {isDone ? (
                         <Check size={16} strokeWidth={3} />
                       ) : (
-                        <StepIcon size={14} className={isCurrent ? 'animate-spin' : ''} />
+                        <StepIcon size={14} className={isCurrent && (step.key === OrderStatus.QUEUED || step.key === OrderStatus.PROCESSING) ? 'animate-spin' : ''} />
                       )}
                     </span>
                   </div>
@@ -141,10 +151,21 @@ export default function OrderTimeline({ currentStatus, logs }: OrderTimelineProp
                         {step.label}
                       </p>
                       <p className="text-xs text-text-muted mt-0.5">{step.desc}</p>
-                      {log?.note && (
-                        <span className="mt-1 inline-block text-[11px] text-text-muted italic bg-light-bg px-2 py-0.5 rounded border border-border-brand">
-                          Catatan: {log.note}
-                        </span>
+                      
+                      {/* Log Action and Admin Info */}
+                      {(log?.note || log?.adminName) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {log?.note && (
+                            <span className="inline-block text-[10px] text-text-muted italic bg-light-bg px-2 py-0.5 rounded border border-border-brand">
+                              Catatan: {log.note}
+                            </span>
+                          )}
+                          {log?.adminName && (
+                            <span className="inline-flex items-center gap-1 rounded bg-slate-50 border border-slate-200 text-[9px] text-slate-500 px-1.5 py-0.5 font-extrabold uppercase">
+                              Oleh: {log.adminName}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                     {log && (

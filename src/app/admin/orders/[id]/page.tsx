@@ -25,13 +25,23 @@ export default async function AdminOrderDetailPage({ params }: OrderDetailPagePr
     return notFound();
   }
 
-  // Calculate position in queue for transparency
+  // Calculate position in queue for transparency (excluding unpaid cashless orders)
   let queuePosition = 0;
-  if (order.status === OrderStatus.QUEUED) {
+  const isCurrentCashlessUnpaid =
+    (order.paymentMethod === 'QRIS' ||
+      order.paymentMethod === 'TRANSFER' ||
+      order.paymentMethod === 'EWALLET') &&
+    order.paymentStatus === 'UNPAID';
+
+  if (order.status === OrderStatus.QUEUED && !isCurrentCashlessUnpaid) {
     const olderQueuedCount = await prisma.order.count({
       where: {
         status: OrderStatus.QUEUED,
         createdAt: { lt: order.createdAt },
+        NOT: {
+          paymentMethod: { in: ['QRIS', 'TRANSFER', 'EWALLET'] },
+          paymentStatus: 'UNPAID',
+        },
       },
     });
     queuePosition = olderQueuedCount + 1;

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createService, updateService, toggleServiceStatus, deleteService } from '@/actions/services';
 import { updateMachineCapacity } from '@/actions/settings';
 import { formatPrice } from '@/lib/format';
-import { Plus, Edit2, Trash2, Loader2, WashingMachine, Check, Sparkles } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, WashingMachine, Check } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface Service {
   id: string;
@@ -31,9 +32,8 @@ export default function ServicesDashboard({
   occupiedMachines = [],
 }: ServicesDashboardProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
@@ -51,8 +51,6 @@ export default function ServicesDashboard({
   const maxMachines = parseInt(settings.max_parallel_orders || '3', 10);
 
   const handleOpenCreate = () => {
-    setError(null);
-    setSuccess(null);
     setEditingService(null);
     setName('');
     setSlug('');
@@ -66,8 +64,6 @@ export default function ServicesDashboard({
   };
 
   const handleOpenEdit = (service: Service) => {
-    setError(null);
-    setSuccess(null);
     setEditingService(service);
     setName(service.name);
     setSlug(service.slug);
@@ -94,15 +90,13 @@ export default function ServicesDashboard({
 
   const handleUpdateCapacity = (newCapacity: number) => {
     if (newCapacity < 1) return;
-    setError(null);
-    setSuccess(null);
 
     startTransition(async () => {
       const res = await updateMachineCapacity(newCapacity);
       if (res?.error) {
-        setError(res.error);
+        showToast(res.error, 'error');
       } else {
-        setSuccess(`Kapasitas mesin cuci berhasil diubah menjadi ${newCapacity} unit!`);
+        showToast(`Kapasitas mesin cuci berhasil diubah menjadi ${newCapacity} unit!`, 'success');
         router.refresh();
       }
     });
@@ -110,15 +104,13 @@ export default function ServicesDashboard({
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
 
     const price = Number(pricePerKg);
     const baseDuration = Number(baseDurationMinutes);
     const durationPerKg = Number(durationPerKgMinutes);
 
     if (price < 0 || baseDuration < 1 || durationPerKg < 0) {
-      setError('Masukkan nilai parameter dengan benar.');
+      showToast('Masukkan nilai parameter dengan benar.', 'error');
       return;
     }
 
@@ -142,9 +134,9 @@ export default function ServicesDashboard({
       }
 
       if (res?.error) {
-        setError(res.error);
+        showToast(res.error, 'error');
       } else if (res?.success) {
-        setSuccess(editingService ? 'Layanan berhasil diperbarui!' : 'Layanan baru ditambahkan!');
+        showToast(editingService ? 'Layanan berhasil diperbarui!' : 'Layanan baru ditambahkan!', 'success');
         setShowModal(false);
         router.refresh();
       }
@@ -152,14 +144,12 @@ export default function ServicesDashboard({
   };
 
   const handleToggle = (id: string, currentStatus: boolean) => {
-    setError(null);
-    setSuccess(null);
     startTransition(async () => {
       const res = await toggleServiceStatus(id, !currentStatus);
       if (res?.error) {
-        setError(res.error);
+        showToast(res.error, 'error');
       } else {
-        setSuccess('Status layanan berhasil diperbarui!');
+        showToast('Status layanan berhasil diperbarui!', 'success');
         router.refresh();
       }
     });
@@ -167,15 +157,13 @@ export default function ServicesDashboard({
 
   const handleDelete = (id: string) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus layanan ini?')) return;
-    setError(null);
-    setSuccess(null);
 
     startTransition(async () => {
       const res = await deleteService(id);
       if (res?.error) {
-        setError(res.error);
+        showToast(res.error, 'error');
       } else if (res?.success) {
-        setSuccess(res.message || 'Layanan dihapus.');
+        showToast(res.message || 'Layanan dihapus.', 'success');
         router.refresh();
       }
     });
@@ -271,18 +259,6 @@ export default function ServicesDashboard({
           Tambah Layanan
         </button>
       </div>
-
-      {/* Messages */}
-      {error && (
-        <div className="rounded-xl border border-rose-250 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-xl border border-emerald-250 bg-emerald-50 p-4 text-xs font-semibold text-emerald-700">
-          {success}
-        </div>
-      )}
 
       {/* Services Table */}
       <div className="rounded-xl border border-border-brand bg-white shadow-xs overflow-hidden">

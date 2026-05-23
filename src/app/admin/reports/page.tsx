@@ -7,57 +7,101 @@ import ReportsCharts from '@/components/admin/ReportsCharts';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminReportsPage() {
-  const reports = await getReportsData();
+interface AdminReportsPageProps {
+  searchParams: Promise<{
+    startDate?: string;
+    endDate?: string;
+  }>;
+}
+
+export default async function AdminReportsPage({ searchParams }: AdminReportsPageProps) {
+  const params = await searchParams;
+  const { startDate, endDate } = params;
+
+  const reports = await getReportsData({
+    startDate,
+    endDate,
+  });
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="space-y-8 animate-fadeIn">
+      
+      {/* Page Header with Date Filter */}
+      <div className="bg-white border border-border-brand rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-6 no-print">
         <div>
-          <p className="text-xs text-text-muted mt-0.5">
-            Ringkasan performa outlet bulan berjalan — pendapatan, volume cucian, dan catatan transaksi.
+          <h2 className="text-lg font-black text-navy-dark">Laporan Keuangan & Performa</h2>
+          <p className="text-[11px] text-text-muted mt-0.5 font-semibold">
+            Ringkasan performa outlet - pendapatan, volume cucian, dan catatan transaksi.
           </p>
         </div>
+
+        <form method="GET" className="flex flex-wrap items-end gap-3 shrink-0">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <div>
+              <label htmlFor="startDate" className="block text-[9px] font-black text-text-muted uppercase tracking-wider mb-1">Dari Tanggal</label>
+              <input
+                type="date"
+                id="startDate"
+                name="startDate"
+                defaultValue={startDate || ''}
+                className="block w-full rounded-xl border border-border-brand bg-light-bg py-2 px-3 text-xs text-text-dark font-bold focus:border-emerald-brand focus:bg-white focus:outline-hidden"
+              />
+            </div>
+            <div>
+              <label htmlFor="endDate" className="block text-[9px] font-black text-text-muted uppercase tracking-wider mb-1">Sampai Tanggal</label>
+              <input
+                type="date"
+                id="endDate"
+                name="endDate"
+                defaultValue={endDate || ''}
+                className="block w-full rounded-xl border border-border-brand bg-light-bg py-2 px-3 text-xs text-text-dark font-bold focus:border-emerald-brand focus:bg-white focus:outline-hidden"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              type="submit"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-xl bg-emerald-brand text-xs font-bold text-white px-4 py-2 hover:bg-emerald-600 shadow-2xs transition-colors cursor-pointer"
+            >
+              Terapkan
+            </button>
+            {(startDate || endDate) && (
+              <a
+                href="/admin/reports"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 text-xs font-bold text-slate-600 px-3 py-2 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Reset
+              </a>
+            )}
+          </div>
+        </form>
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardCard
           title="Omzet Hari Ini"
           value={formatPrice(reports.revenueToday)}
           icon={<Banknote size={18} />}
-          description="Lunas hari ini"
+          description="Hari ini"
         />
         <DashboardCard
           title="Omzet Minggu Ini"
           value={formatPrice(reports.revenueThisWeek)}
           icon={<TrendingUp size={18} />}
-          description="Sen — Min minggu ini"
+          description="Sen - Min minggu ini"
         />
         <DashboardCard
-          title="Omzet Bulan Ini"
+          title={startDate || endDate ? "Omzet Terfilter" : "Omzet Bulan Ini"}
           value={formatPrice(reports.revenueThisMonth)}
           icon={<BarChart3 size={18} />}
-          description="Total pendapatan bulan berjalan"
+          description={startDate || endDate ? "Total omzet rentang waktu terfilter" : "Total omzet bulan berjalan"}
         />
         <DashboardCard
           title="Total Pesanan"
           value={`${reports.totalOrdersThisMonth}`}
           icon={<Package size={18} />}
-          description="Pesanan masuk bulan ini"
-        />
-        <DashboardCard
-          title="Cucian Diambil"
-          value={`${reports.completedOrdersThisMonth}`}
-          icon={<ClipboardCheck size={18} />}
-          description="Selesai & picked up"
-        />
-        <DashboardCard
-          title="Total Berat"
-          value={`${reports.totalWeightKgThisMonth} kg`}
-          icon={<Weight size={18} />}
-          description="Volume cucian bulan ini"
+          description={startDate || endDate ? "Pesanan masuk rentang terfilter" : "Pesanan masuk bulan ini"}
         />
       </div>
 

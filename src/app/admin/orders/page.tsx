@@ -2,17 +2,15 @@ import React from 'react';
 import Link from 'next/link';
 import { Search, Plus, Filter, RotateCcw } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
-import PaymentBadge from '@/components/ui/PaymentBadge';
 import { getOrders } from '@/actions/orders';
 import { getServices } from '@/actions/services';
 import { formatPrice, formatDateTime } from '@/lib/format';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 
 interface OrdersPageProps {
   searchParams: Promise<{
     search?: string;
     status?: OrderStatus;
-    paymentStatus?: PaymentStatus;
     serviceId?: string;
   }>;
 }
@@ -26,7 +24,6 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
   const resolvedFilters = {
     search: filters.search || undefined,
     status: filters.status || undefined,
-    paymentStatus: filters.paymentStatus || undefined,
     serviceId: filters.serviceId || undefined,
   };
 
@@ -46,18 +43,30 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
             Total ditemukan: <span className="font-semibold text-text-dark">{orders.length} pesanan</span>
           </p>
         </div>
-        <Link
-          href="/admin/orders/new"
-          className="inline-flex items-center gap-2 rounded-xl bg-emerald-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-600 self-start sm:self-auto"
-        >
-          <Plus size={18} />
-          Buat Pesanan
-        </Link>
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          <Link
+            href="/admin/queue"
+            className="inline-flex items-center gap-2 rounded-xl border border-indigo-150 bg-indigo-50/80 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-50 transition-colors shadow-2xs cursor-pointer"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            Pantau Antrean Kerja
+          </Link>
+          <Link
+            href="/admin/orders/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-brand px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-600 shadow-2xs cursor-pointer"
+          >
+            <Plus size={18} />
+            Buat Pesanan
+          </Link>
+        </div>
       </div>
 
       {/* Filters Form */}
       <div className="rounded-xl border border-border-brand bg-white p-5 shadow-xs">
-        <form method="GET" action="/admin/orders" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 items-end">
+        <form method="GET" action="/admin/orders" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
           
           {/* Search bar */}
           <div className="lg:col-span-2">
@@ -99,26 +108,6 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
             </select>
           </div>
 
-          {/* Payment Status */}
-          <div>
-            <label htmlFor="paymentStatus" className="block text-xs font-bold text-navy-dark uppercase tracking-wider mb-2">
-              Status Bayar
-            </label>
-            <select
-              name="paymentStatus"
-              id="paymentStatus"
-              defaultValue={filters.paymentStatus || ''}
-              className="block w-full rounded-xl border border-border-brand bg-light-bg py-2.5 px-3 text-xs text-text-dark focus:border-emerald-brand focus:bg-white focus:outline-hidden font-medium"
-            >
-              <option value="">Semua Pembayaran</option>
-              {Object.values(PaymentStatus).map((status) => (
-                <option key={status} value={status}>
-                  {status.toLowerCase()}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Buttons */}
           <div className="flex gap-2">
             <button
@@ -152,7 +141,6 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
                 <th className="p-4 text-center">BERAT</th>
                 <th className="p-4">TOTAL</th>
                 <th className="p-4 text-center">STATUS</th>
-                <th className="p-4 text-center">PEMBAYARAN</th>
                 <th className="p-4">ESTIMASI SELESAI</th>
                 <th className="p-4">TANGGAL MASUK</th>
               </tr>
@@ -160,7 +148,7 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-text-muted">
+                  <td colSpan={8} className="p-12 text-center text-text-muted">
                     Tidak ada pesanan laundry yang cocok dengan kriteria filter.
                   </td>
                 </tr>
@@ -183,13 +171,12 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
                       <div className="text-[10px] text-text-muted">{order.customer.phone || '-'}</div>
                     </td>
                     <td className="p-4 font-semibold text-text-dark">{order.service.name}</td>
-                    <td className="p-4 text-center font-bold text-text-dark">{order.weightKg} kg</td>
+                    <td className="p-4 text-center font-bold text-text-dark">
+                      {order.weightKg} {order.service.unit === 'ITEM' ? 'item' : 'kg'}
+                    </td>
                     <td className="p-4 font-extrabold text-navy-dark">{formatPrice(order.totalPrice)}</td>
                     <td className="p-4 text-center">
                       <StatusBadge status={order.status} />
-                    </td>
-                    <td className="p-4 text-center">
-                      <PaymentBadge status={order.paymentStatus} />
                     </td>
                     <td className="p-4 font-semibold text-text-muted">
                       {formatDateTime(order.estimatedEndAt)}

@@ -8,6 +8,7 @@ interface AppLogoProps {
   textSuffix?: string;
   lightText?: boolean;
   lightBg?: boolean;
+  customText?: string;
 }
 
 export default function AppLogo({
@@ -17,6 +18,7 @@ export default function AppLogo({
   textSuffix = '',
   lightText = false,
   lightBg = false,
+  customText,
 }: AppLogoProps) {
   return (
     <div className={`flex items-center gap-2.5 font-bold ${className}`}>
@@ -37,7 +39,13 @@ export default function AppLogo({
           ? 'text-slate-800' 
           : 'text-slate-800 dark:text-white'
       }`}>
-        Bila<span className="text-emerald-brand">sin</span>
+        {customText ? (
+          customText
+        ) : (
+          <>
+            Bila<span className="text-emerald-brand">sin</span>
+          </>
+        )}
         {textSuffix && <span className="ml-1 text-sm font-bold text-slate-400">{textSuffix}</span>}
       </span>
     </div>

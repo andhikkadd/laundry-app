@@ -38,7 +38,7 @@ export default function TrackingSearch() {
   };
 
   return (
-    <div className="mx-auto mt-10 max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-xl shadow-slate-100/40">
+    <div className="mx-auto mt-6 md:mt-10 max-w-md rounded-2xl border border-slate-100 bg-white p-4 sm:p-6 shadow-xl shadow-slate-100/40">
       <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-text-muted">

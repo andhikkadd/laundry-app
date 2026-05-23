@@ -53,8 +53,8 @@ export default function ReportsCharts({
   const handleExportCSV = () => {
     const headers = ['Tanggal', 'Pendapatan (Rp)'];
     const rows = dailyRevenue.map((d) => [d.date, d.revenue.toString()]);
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

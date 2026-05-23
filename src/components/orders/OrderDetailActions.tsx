@@ -3,9 +3,8 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateOrderStatus, markPaymentAsPaid } from '@/actions/orders';
-import { OrderStatus, PaymentStatus, PaymentMethod } from '@prisma/client';
+import { OrderStatus, PaymentMethod } from '@prisma/client';
 import StatusBadge from '../ui/StatusBadge';
-import PaymentBadge from '../ui/PaymentBadge';
 import OrderTimeline from './OrderTimeline';
 import { formatPrice, formatDateTime } from '@/lib/format';
 import {
@@ -14,13 +13,20 @@ import {
   Play,
   ClipboardCheck,
   XCircle,
-  CreditCard,
   Check,
   Loader2,
   Copy,
   ExternalLink,
   Download,
+  ArrowUpRight,
 } from 'lucide-react';
+
+type ReceiptLine =
+  | { type: 'text'; content: string; align?: 'center' | 'left'; bold?: boolean }
+  | { type: 'dashed' }
+  | { type: 'spacing'; height: number }
+  | { type: 'columns'; left: string; right: string; bold?: boolean }
+  | { type: 'qr' };
 
 interface OrderDetailActionsProps {
   order: any;
@@ -40,11 +46,14 @@ export default function OrderDetailActions({
   queuePosition = 0,
 }: OrderDetailActionsProps) {
   const router = useRouter();
+  const isCashlessUnpaid =
+    (order.paymentMethod === 'QRIS' ||
+      order.paymentMethod === 'TRANSFER' ||
+      order.paymentMethod === 'EWALLET') &&
+    order.paymentStatus === 'UNPAID';
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
 
   // Custom Status Modal State
@@ -98,21 +107,23 @@ export default function OrderDetailActions({
     });
   };
 
-  const handlePaymentSubmit = () => {
-    setError(null);
-    setSuccessMsg(null);
-    setShowPaymentModal(false);
-
-    startTransition(async () => {
-      const res = await markPaymentAsPaid(order.id, paymentMethod);
-      if (res?.error) {
-        setError(res.error);
-      } else {
-        setSuccessMsg('Pembayaran berhasil dicatat.');
-        router.refresh();
-      }
-    });
+  const handleMarkAsPaid = () => {
+    if (confirm('Apakah Anda yakin ingin menandai pesanan ini sebagai DIBAYAR?')) {
+      setError(null);
+      setSuccessMsg(null);
+      startTransition(async () => {
+        const res = await markPaymentAsPaid(order.id, order.paymentMethod);
+        if (res?.error) {
+          setError(res.error);
+        } else {
+          setSuccessMsg('Pembayaran berhasil ditandai sebagai DIBAYAR!');
+          router.refresh();
+        }
+      });
+    }
   };
+
+
 
   const copyWhatsAppMessage = () => {
     const msg = `Halo ${order.customer.name}, laundry Anda dengan kode order *${order.orderCode}* sudah SIAP untuk diambil di outlet *${settings.outlet_name || 'Bilasin'}*. Terima kasih.`;
@@ -134,13 +145,7 @@ export default function OrderDetailActions({
 
     qrImg.onload = () => {
       // Define lines of receipt
-      const lines: Array<
-        | { type: 'text'; content: string; align?: 'center' | 'left'; bold?: boolean }
-        | { type: 'dashed' }
-        | { type: 'spacing'; height: number }
-        | { type: 'columns'; left: string; right: string; bold?: boolean }
-        | { type: 'qr' }
-      > = [
+      const lines: ReceiptLine[] = [
         { type: 'text', content: settings.outlet_name || 'Bilasin', align: 'center', bold: true },
         { type: 'text', content: settings.outlet_address || 'Your Laundry Outlet', align: 'center' },
         { type: 'text', content: `Telp: ${settings.outlet_phone || '08123456789'}`, align: 'center' },
@@ -157,7 +162,7 @@ export default function OrderDetailActions({
         { type: 'columns', left: order.service.unit === 'ITEM' ? 'Harga/Item:' : 'Harga/Kg:', right: formatPrice(order.pricePerKg) },
         { type: 'dashed' },
         { type: 'columns', left: 'Total Bayar:', right: formatPrice(order.totalPrice), bold: true },
-        { type: 'columns', left: 'Status:', right: `${order.paymentStatus} (${order.paymentMethod})` },
+        { type: 'columns', left: 'Pembayaran:', right: order.paymentMethod === 'CASH' ? 'TUNAI' : (order.paymentMethod || '-') },
         { type: 'dashed' },
         { type: 'text', content: 'Pindai QR ini untuk melacak status:', align: 'center' },
         { type: 'qr' },
@@ -256,32 +261,62 @@ export default function OrderDetailActions({
 
         {/* Info card */}
         <div className="rounded-xl border border-border-brand bg-white p-6 shadow-xs space-y-6">
+          {/* Invoice Code and Dynamic status */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border-brand pb-4">
             <div>
-              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">KODE INVOICE</span>
-              <h2 className="text-xl font-black text-navy-dark tracking-tight">{order.orderCode}</h2>
-              <span className="text-[10px] text-text-muted mt-0.5 flex flex-wrap items-center gap-2">
-                <span>No. Antrean: <span className="font-extrabold text-navy-dark text-xs">#{order.queueNumber.toString().padStart(3, '0')}</span></span>
-                {order.status === OrderStatus.QUEUED && queuePosition > 0 && (
-                  <span className="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-[9px] font-bold border border-blue-200">
-                    Antrean ke-{queuePosition}
-                  </span>
-                )}
-                {order.status === OrderStatus.PROCESSING && order.machineNumber && (
-                  <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[9px] font-bold border border-amber-250 animate-pulse">
-                    Mesin Cuci #{order.machineNumber}
-                  </span>
-                )}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">KODE INVOICE</span>
+                <a
+                  href="/admin/queue"
+                  className="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-indigo-600 hover:text-indigo-750 transition-colors border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 px-2 py-0.5 rounded-lg"
+                >
+                  Pantau Antrean Kerja
+                  <ArrowUpRight size={10} />
+                </a>
+              </div>
+              <h2 className="text-xl font-black text-navy-dark tracking-tight mt-1">{order.orderCode}</h2>
             </div>
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={order.status} />
-              <PaymentBadge status={order.paymentStatus} />
             </div>
           </div>
 
-          {/* Customer / Service grids */}
-          <div className="grid gap-6 sm:grid-cols-2 text-xs">
+          {/* Premium "Sirkuit Antrean & Aliran Kerja" Segmented Ticket */}
+          <div className="bg-slate-50/50 border border-border-brand/80 rounded-xl p-4 grid gap-4 grid-cols-3 divide-x divide-slate-200">
+            <div>
+              <span className="text-[9px] font-black text-text-muted uppercase tracking-wider block">No. Antrean Utama</span>
+              <span className="text-sm font-black text-navy-dark tracking-tight block mt-0.5">#{order.queueNumber.toString().padStart(3, '0')}</span>
+            </div>
+            <div className="pl-4">
+              <span className="text-[9px] font-black text-text-muted uppercase tracking-wider block">Posisi Lintasan Antrean</span>
+              {isCashlessUnpaid ? (
+                <span className="text-xs font-bold text-amber-700 block mt-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 w-max">Tunggu Bayar QRIS</span>
+              ) : order.status === OrderStatus.QUEUED ? (
+                <span className="text-xs font-bold text-indigo-700 block mt-1 bg-indigo-50 border border-indigo-150 rounded-lg px-2 py-0.5 w-max">Antrean ke-{queuePosition}</span>
+              ) : order.status === OrderStatus.PROCESSING ? (
+                <span className="text-xs font-bold text-amber-700 block mt-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 w-max animate-pulse">Sedang Dicuci</span>
+              ) : order.status === OrderStatus.READY ? (
+                <span className="text-xs font-bold text-emerald-700 block mt-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-0.5 w-max">Siap Diambil</span>
+              ) : order.status === OrderStatus.PICKED_UP ? (
+                <span className="text-xs font-bold text-slate-700 block mt-1 bg-slate-100 border border-slate-200 rounded-lg px-2 py-0.5 w-max">Cucian Selesai</span>
+              ) : (
+                <span className="text-xs font-bold text-rose-700 block mt-1 bg-rose-50 border border-rose-200 rounded-lg px-2 py-0.5 w-max">Batal</span>
+              )}
+            </div>
+            <div className="pl-4">
+              <span className="text-[9px] font-black text-text-muted uppercase tracking-wider block">Stasiun / Mesin Cuci</span>
+              {order.status === OrderStatus.PROCESSING && order.machineNumber ? (
+                <span className="text-xs font-black text-emerald-brand block mt-1 bg-emerald-50 border border-emerald-250 rounded-lg px-2 py-0.5 w-max">Mesin #{order.machineNumber}</span>
+              ) : order.status === OrderStatus.QUEUED ? (
+                <span className="text-xs font-bold text-text-muted block mt-1 bg-slate-100 border border-slate-200 rounded-lg px-2 py-0.5 w-max">Tunggu Mesin</span>
+              ) : (
+                <span className="text-xs font-bold text-slate-400 block mt-1">-</span>
+              )}
+            </div>
+          </div>
+
+          {/* Customer / Service / Payment grids */}
+          <div className="grid gap-6 sm:grid-cols-3 text-xs">
             <div>
               <h4 className="font-bold text-navy-dark uppercase tracking-wider mb-2">Data Pelanggan</h4>
               <p className="font-semibold text-text-dark">{order.customer.name}</p>
@@ -290,8 +325,25 @@ export default function OrderDetailActions({
             <div>
               <h4 className="font-bold text-navy-dark uppercase tracking-wider mb-2">Detail Layanan</h4>
               <p className="font-semibold text-text-dark">{order.service.name}</p>
-              <p className="text-text-muted mt-1">{order.weightKg} kg @ {formatPrice(order.pricePerKg)}/kg</p>
+              <p className="text-text-muted mt-1">
+                {order.weightKg} {order.service.unit === 'ITEM' ? 'item' : 'kg'} @ {formatPrice(order.pricePerKg)}/{order.service.unit === 'ITEM' ? 'item' : 'kg'}
+              </p>
               <p className="font-extrabold text-emerald-brand mt-1 text-sm">{formatPrice(order.totalPrice)}</p>
+            </div>
+            <div>
+              <h4 className="font-bold text-navy-dark uppercase tracking-wider mb-2">Status Pembayaran</h4>
+              <p className="font-semibold text-text-dark">Metode: <span className="font-extrabold uppercase">{order.paymentMethod === 'CASH' ? 'TUNAI' : order.paymentMethod}</span></p>
+              <p className="mt-1.5">
+                {order.paymentStatus === 'PAID' ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-250">
+                    🟢 DIBAYAR
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-250 animate-pulse">
+                    🟡 BELUM BAYAR
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
@@ -348,6 +400,24 @@ export default function OrderDetailActions({
               const maxMachines = parseInt(settings.max_parallel_orders || '3', 10);
               const busyCount = occupiedMachines.length;
               const isFull = busyCount >= maxMachines;
+              
+              if (isCashlessUnpaid) {
+                return (
+                  <div className="space-y-2">
+                    <button
+                      disabled={true}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-400 border border-slate-200 cursor-not-allowed"
+                    >
+                      <Play size={14} />
+                      Mulai Proses (Washing)
+                    </button>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[10px] font-bold text-amber-700 leading-normal">
+                      ⚠️ Cucian QRIS/Transfer belum dibayar. Pelanggan harus menyelesaikan pembayaran online terlebih dahulu sebelum pencucian dapat dimulai!
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <button
                   onClick={() => handleStatusChange(OrderStatus.PROCESSING)}
@@ -384,15 +454,15 @@ export default function OrderDetailActions({
               </button>
             )}
 
-            {/* 4. Payment Trigger */}
-            {order.paymentStatus === PaymentStatus.UNPAID && (
+            {/* Manual payment confirmation */}
+            {order.paymentStatus === 'UNPAID' && (
               <button
-                onClick={() => setShowPaymentModal(true)}
+                onClick={handleMarkAsPaid}
                 disabled={isPending}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-650 bg-emerald-50/50 py-3 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition-colors shadow-xs"
               >
-                <CreditCard size={14} />
-                Catat Pelunasan Bayar
+                <CheckCircle size={14} />
+                Tandai Dibayar (Terima Uang)
               </button>
             )}
 
@@ -546,52 +616,7 @@ export default function OrderDetailActions({
         </div>
       )}
 
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-border-brand">
-            <h3 className="text-sm font-bold text-navy-dark uppercase tracking-wider mb-4 border-b border-border-brand pb-2">
-              Pencatatan Pembayaran
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-text-dark mb-2">METODE BAYAR</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className="block w-full rounded-xl border border-border-brand bg-light-bg py-2.5 px-3 text-xs text-text-dark focus:outline-hidden font-medium"
-                >
-                  <option value={PaymentMethod.CASH}>Tunai / Cash</option>
-                  <option value={PaymentMethod.TRANSFER}>Transfer Bank</option>
-                  <option value={PaymentMethod.QRIS}>QRIS</option>
-                  <option value={PaymentMethod.EWALLET}>E-Wallet</option>
-                </select>
-              </div>
 
-              <div className="text-xs bg-light-bg p-3 rounded-lg border border-border-brand">
-                Total Tagihan: <span className="font-extrabold text-emerald-brand">{formatPrice(order.totalPrice)}</span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 rounded-xl border border-border-brand py-2 text-xs font-bold text-text-muted hover:bg-slate-50"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={handlePaymentSubmit}
-                  className="flex-1 rounded-xl bg-emerald-brand py-2 text-xs font-bold text-white hover:bg-emerald-600 flex items-center justify-center gap-1.5"
-                >
-                  <Check size={14} />
-                  Simpan Lunas
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Receipt Preview Modal */}
       {showReceiptPreview && (
@@ -654,8 +679,8 @@ export default function OrderDetailActions({
                       <td className="text-right py-1.5 font-extrabold text-slate-900">{formatPrice(order.totalPrice)}</td>
                     </tr>
                     <tr>
-                      <td className="py-0.5 text-slate-600">Status:</td>
-                      <td className="text-right py-0.5 font-bold uppercase text-slate-900">{order.paymentStatus} ({order.paymentMethod})</td>
+                      <td className="py-0.5 text-slate-600">Pembayaran:</td>
+                      <td className="text-right py-0.5 font-bold uppercase text-slate-900">{order.paymentMethod === 'CASH' ? 'TUNAI' : order.paymentMethod}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -742,8 +767,8 @@ export default function OrderDetailActions({
                   <td style={{ textAlign: 'right', padding: '5px 0 3px 0', borderTop: '1px dashed black' }}>{formatPrice(order.totalPrice)}</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: '3px 0' }}>Status:</td>
-                  <td style={{ textAlign: 'right', padding: '3px 0', textTransform: 'uppercase' }}>{order.paymentStatus} ({order.paymentMethod})</td>
+                  <td style={{ padding: '3px 0' }}>Pembayaran:</td>
+                  <td style={{ textAlign: 'right', padding: '3px 0', textTransform: 'uppercase' }}>{order.paymentMethod === 'CASH' ? 'TUNAI' : order.paymentMethod}</td>
                 </tr>
               </tbody>
             </table>

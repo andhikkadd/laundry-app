@@ -21,9 +21,10 @@ import { logoutAction } from '@/actions/auth';
 interface AdminSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  outletName?: string;
 }
 
-export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
+export default function AdminSidebar({ isOpen, onClose, outletName }: AdminSidebarProps) {
   const pathname = usePathname();
 
   const menuItems = [
@@ -56,7 +57,7 @@ export default function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
         {/* Sidebar Header */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
           <Link href="/admin/dashboard" className="flex items-center">
-            <AppLogo lightText={true} iconSize={24} textSize="text-xl" />
+            <AppLogo lightText={true} iconSize={24} textSize="text-xl" customText={outletName} />
           </Link>
           <button
             onClick={onClose}

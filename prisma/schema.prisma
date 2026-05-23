@@ -123,6 +123,7 @@ model OrderStatusLog {
   orderId   String
   status    OrderStatus
   note      String?
+  adminName String?
   createdAt DateTime    @default(now())
   order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }

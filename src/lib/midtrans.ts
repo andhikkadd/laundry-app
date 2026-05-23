@@ -77,3 +77,42 @@ export async function createMidtransTransaction({
     return { token: null, redirectUrl: null };
   }
 }
+
+export async function checkMidtransStatus(orderId: string) {
+  const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+
+  if (!serverKey) {
+    return null;
+  }
+
+  const baseUrl = isProduction
+    ? `https://api.midtrans.com/v2/${orderId}/status`
+    : `https://api.sandbox.midtrans.com/v2/${orderId}/status`;
+
+  const authHeader = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authHeader,
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+         return null;
+      }
+      throw new Error(`Midtrans API responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Failed to check Midtrans status:', error);
+    return null;
+  }
+}

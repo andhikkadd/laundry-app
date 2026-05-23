@@ -5,7 +5,6 @@ import { ArrowLeft, User, ClipboardList, Wallet } from 'lucide-react';
 import { getCustomerDetail } from '@/actions/customers';
 import { formatPrice, formatDateTime } from '@/lib/format';
 import StatusBadge from '@/components/ui/StatusBadge';
-import PaymentBadge from '@/components/ui/PaymentBadge';
 
 interface CustomerDetailPageProps {
   params: Promise<{ id: string }>;
@@ -83,14 +82,13 @@ export default async function AdminCustomerDetailPage({ params }: CustomerDetail
                 <th className="p-3 text-center">BERAT</th>
                 <th className="p-3">TOTAL HARGA</th>
                 <th className="p-3 text-center">STATUS CUCIAN</th>
-                <th className="p-3 text-center">PEMBAYARAN</th>
                 <th className="p-3">TANGGAL MASUK</th>
               </tr>
             </thead>
             <tbody>
               {customer.orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-text-muted">
+                  <td colSpan={6} className="p-8 text-center text-text-muted">
                     Pelanggan ini belum memiliki riwayat pencucian.
                   </td>
                 </tr>
@@ -109,13 +107,12 @@ export default async function AdminCustomerDetailPage({ params }: CustomerDetail
                       </Link>
                     </td>
                     <td className="p-3 font-semibold text-text-dark">{order.service.name}</td>
-                    <td className="p-3 text-center font-bold text-text-dark">{order.weightKg} kg</td>
+                    <td className="p-3 text-center font-bold text-text-dark">
+                      {order.weightKg} {order.service.unit === 'ITEM' ? 'item' : 'kg'}
+                    </td>
                     <td className="p-3 font-extrabold text-navy-dark">{formatPrice(order.totalPrice)}</td>
                     <td className="p-3 text-center">
                       <StatusBadge status={order.status} />
-                    </td>
-                    <td className="p-3 text-center">
-                      <PaymentBadge status={order.paymentStatus} />
                     </td>
                     <td className="p-3 text-text-muted">{formatDateTime(order.createdAt)}</td>
                   </tr>

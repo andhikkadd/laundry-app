@@ -1,11 +1,11 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, format } from 'date-fns';
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, format, differenceInDays } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { PaymentStatus, OrderStatus } from '@prisma/client';
 
-export async function getReportsData() {
+export async function getReportsData(range?: { startDate?: string; endDate?: string }) {
   try {
     const now = new Date();
 
@@ -15,8 +15,16 @@ export async function getReportsData() {
     const startWeek = startOfWeek(now, { weekStartsOn: 1 });
     const endWeek = endOfWeek(now, { weekStartsOn: 1 });
 
-    const startMonth = startOfMonth(now);
-    const endMonth = endOfMonth(now);
+    // Set fallback range (current month)
+    let rangeStart = startOfMonth(now);
+    let rangeEnd = endOfMonth(now);
+
+    if (range?.startDate) {
+      rangeStart = startOfDay(new Date(range.startDate));
+    }
+    if (range?.endDate) {
+      rangeEnd = endOfDay(new Date(range.endDate));
+    }
 
     // 1. Revenue Today
     const paymentsToday = await prisma.payment.aggregate({
@@ -48,13 +56,13 @@ export async function getReportsData() {
     });
     const revenueThisWeek = paymentsWeek._sum.amount || 0;
 
-    // 3. Revenue This Month
+    // 3. Revenue in Selected Range (replaces Revenue This Month)
     const paymentsMonth = await prisma.payment.aggregate({
       where: {
         status: PaymentStatus.PAID,
         paidAt: {
-          gte: startMonth,
-          lte: endMonth,
+          gte: rangeStart,
+          lte: rangeEnd,
         },
       },
       _sum: {
@@ -63,33 +71,33 @@ export async function getReportsData() {
     });
     const revenueThisMonth = paymentsMonth._sum.amount || 0;
 
-    // 4. Completed Orders This Month
+    // 4. Completed Orders in Selected Range
     const completedOrdersThisMonth = await prisma.order.count({
       where: {
         status: OrderStatus.PICKED_UP,
         pickedUpAt: {
-          gte: startMonth,
-          lte: endMonth,
+          gte: rangeStart,
+          lte: rangeEnd,
         },
       },
     });
 
-    // 5. Total orders this month (all statuses)
+    // 5. Total orders in Selected Range (all statuses)
     const totalOrdersThisMonth = await prisma.order.count({
       where: {
         createdAt: {
-          gte: startMonth,
-          lte: endMonth,
+          gte: rangeStart,
+          lte: rangeEnd,
         },
       },
     });
 
-    // 6. Total weight this month
+    // 6. Total weight in Selected Range
     const weightThisMonth = await prisma.order.aggregate({
       where: {
         createdAt: {
-          gte: startMonth,
-          lte: endMonth,
+          gte: rangeStart,
+          lte: rangeEnd,
         },
       },
       _sum: {
@@ -122,13 +130,13 @@ export async function getReportsData() {
       }
     }
 
-    // 8. Service distribution for chart
+    // 8. Service distribution for chart in Selected Range
     const allServiceCounts = await prisma.order.groupBy({
       by: ['serviceId'],
       where: {
         createdAt: {
-          gte: startMonth,
-          lte: endMonth,
+          gte: rangeStart,
+          lte: rangeEnd,
         },
       },
       _count: { id: true },
@@ -143,10 +151,13 @@ export async function getReportsData() {
       };
     }).sort((a, b) => b.count - a.count);
 
-    // 9. Daily revenue for last 14 days
+    // 9. Daily revenue for dynamic dates in Selected Range (max 31 days)
+    const daysDiff = Math.max(0, differenceInDays(rangeEnd, rangeStart));
+    const chartDays = Math.min(daysDiff, 31);
+    
     const dailyRevenue: { date: string; label: string; revenue: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const day = subDays(now, i);
+    for (let i = chartDays; i >= 0; i--) {
+      const day = subDays(rangeEnd, i);
       const dayStart = startOfDay(day);
       const dayEnd = endOfDay(day);
       
@@ -165,11 +176,11 @@ export async function getReportsData() {
       });
     }
 
-    // 10. Status distribution this month
+    // 10. Status distribution in Selected Range
     const statusCounts = await prisma.order.groupBy({
       by: ['status'],
       where: {
-        createdAt: { gte: startMonth, lte: endMonth },
+        createdAt: { gte: rangeStart, lte: rangeEnd },
       },
       _count: { id: true },
     });

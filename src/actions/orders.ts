@@ -4,10 +4,11 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { calculateOrderEstimation } from '@/lib/estimation';
 import { generateOrderCodeAndQueue } from '@/lib/order-code';
-import { createMidtransTransaction } from '@/lib/midtrans';
+import { createMidtransTransaction, checkMidtransStatus } from '@/lib/midtrans';
 import { OrderStatus, PaymentStatus, PaymentMethod, NotificationType, NotificationStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { startOfDay, endOfDay } from 'date-fns';
+import { getAdminSession } from '@/lib/auth';
 
 
 const createOrderSchema = z.object({
@@ -15,7 +16,6 @@ const createOrderSchema = z.object({
   customerPhone: z.string().optional().or(z.literal('')),
   serviceId: z.string().min(1, 'Service is required'),
   weightKg: z.coerce.number().gt(0, 'Weight must be greater than 0'),
-  paymentStatus: z.nativeEnum(PaymentStatus),
   paymentMethod: z.nativeEnum(PaymentMethod),
   notes: z.string().optional().or(z.literal('')),
 });
@@ -36,14 +36,26 @@ export async function getDashboardStats() {
       },
     });
 
-    // 2. Orders in queue
+    // 2. Orders in queue (excluding unpaid cashless orders)
     const queuedCount = await prisma.order.count({
-      where: { status: OrderStatus.QUEUED },
+      where: {
+        status: OrderStatus.QUEUED,
+        NOT: {
+          paymentMethod: { in: ['QRIS', 'TRANSFER', 'EWALLET'] },
+          paymentStatus: 'UNPAID',
+        },
+      },
     });
 
-    // 3. Orders in progress
+    // 3. Orders in progress (excluding unpaid cashless orders)
     const processingCount = await prisma.order.count({
-      where: { status: OrderStatus.PROCESSING },
+      where: {
+        status: OrderStatus.PROCESSING,
+        NOT: {
+          paymentMethod: { in: ['QRIS', 'TRANSFER', 'EWALLET'] },
+          paymentStatus: 'UNPAID',
+        },
+      },
     });
 
     // 4. Ready to pick up
@@ -141,7 +153,6 @@ export async function getDashboardStats() {
 export async function getOrders(filters?: {
   search?: string;
   status?: OrderStatus;
-  paymentStatus?: PaymentStatus;
   serviceId?: string;
 }) {
   try {
@@ -149,10 +160,6 @@ export async function getOrders(filters?: {
 
     if (filters?.status) {
       where.status = filters.status;
-    }
-
-    if (filters?.paymentStatus) {
-      where.paymentStatus = filters.paymentStatus;
     }
 
     if (filters?.serviceId) {
@@ -228,7 +235,6 @@ export async function createOrder(data: {
   customerPhone?: string;
   serviceId: string;
   weightKg: number;
-  paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
   notes?: string;
 }) {
@@ -283,7 +289,7 @@ export async function createOrder(data: {
       }
     }
 
-    // 6. Create Order
+    // 6. Create Order (starts as UNPAID so QRIS/cashless orders must go through the payment gateway first)
     const order = await prisma.order.create({
       data: {
         orderCode,
@@ -292,7 +298,7 @@ export async function createOrder(data: {
         weightKg: data.weightKg,
         pricePerKg,
         totalPrice,
-        paymentStatus: data.paymentStatus,
+        paymentStatus: PaymentStatus.UNPAID,
         paymentMethod: data.paymentMethod,
         status: OrderStatus.QUEUED,
         queueNumber,
@@ -304,23 +310,26 @@ export async function createOrder(data: {
     });
 
     // 7. Payment record
-    const isPaid = data.paymentStatus === PaymentStatus.PAID;
     await prisma.payment.create({
       data: {
         orderId: order.id,
         amount: totalPrice,
         method: data.paymentMethod,
-        status: data.paymentStatus,
-        paidAt: isPaid ? new Date() : null,
+        status: PaymentStatus.UNPAID,
+        paidAt: null,
       },
     });
 
     // 8. Order Status Log
+    const session = await getAdminSession();
+    const adminName = session?.name || 'Sistem';
+
     await prisma.orderStatusLog.create({
       data: {
         orderId: order.id,
         status: OrderStatus.QUEUED,
         note: 'Order registered in system.',
+        adminName,
       },
     });
 
@@ -438,11 +447,15 @@ export async function updateOrderStatus(
     });
 
     // Write Log
+    const session = await getAdminSession();
+    const adminName = session?.name || 'Sistem';
+
     await prisma.orderStatusLog.create({
       data: {
         orderId,
         status: nextStatus,
         note: note || `Status updated to ${nextStatus.toLowerCase().replace('_', ' ')}.`,
+        adminName,
       },
     });
 
@@ -530,5 +543,99 @@ export async function getOccupiedMachines() {
   } catch (err) {
     console.error('Error fetching occupied machines:', err);
     return [];
+  }
+}
+
+export async function getTrackingData(orderCode: string) {
+  try {
+    let order = await getOrderByCode(orderCode);
+    if (!order) return null;
+
+    const isCurrentCashlessUnpaid =
+      (order.paymentMethod === 'QRIS' ||
+        order.paymentMethod === 'TRANSFER' ||
+        order.paymentMethod === 'EWALLET') &&
+      order.paymentStatus === 'UNPAID';
+
+    if (isCurrentCashlessUnpaid) {
+      const midtransStatus = await checkMidtransStatus(orderCode);
+      if (midtransStatus && (midtransStatus.transaction_status === 'settlement' || midtransStatus.transaction_status === 'capture')) {
+        let method = order.paymentMethod;
+        if (midtransStatus.payment_type === 'bank_transfer' || midtransStatus.payment_type === 'echannel') {
+           method = PaymentMethod.TRANSFER;
+        } else if (midtransStatus.payment_type === 'qris') {
+           method = PaymentMethod.QRIS;
+        }
+        await markPaymentAsPaid(order.id, method);
+        order = await getOrderByCode(orderCode); // Refresh order state
+        if (!order) return null;
+      }
+    }
+
+    let queuePosition = 0;
+    const isStillCashlessUnpaid =
+      (order.paymentMethod === 'QRIS' ||
+        order.paymentMethod === 'TRANSFER' ||
+        order.paymentMethod === 'EWALLET') &&
+      order.paymentStatus === 'UNPAID';
+
+    if (order.status === OrderStatus.QUEUED && !isStillCashlessUnpaid) {
+      const olderQueuedCount = await prisma.order.count({
+        where: {
+          status: OrderStatus.QUEUED,
+          createdAt: { lt: order.createdAt },
+          NOT: {
+            paymentMethod: { in: ['QRIS', 'TRANSFER', 'EWALLET'] },
+            paymentStatus: 'UNPAID',
+          },
+        },
+      });
+      queuePosition = olderQueuedCount + 1;
+    }
+
+    return {
+      order,
+      queuePosition,
+    };
+  } catch (err) {
+    console.error('Error in getTrackingData:', err);
+    return null;
+  }
+}
+
+export async function getMidtransTokenForOrder(orderCode: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { orderCode },
+      include: {
+        customer: true,
+        service: true,
+      },
+    });
+
+    if (!order) {
+      return { error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      return { success: true, alreadyPaid: true };
+    }
+
+    const transaction = await createMidtransTransaction({
+      orderId: order.orderCode,
+      grossAmount: order.totalPrice,
+      customerName: order.customer.name,
+      customerPhone: order.customer.phone || undefined,
+      serviceName: `${order.service.name} Laundry (${order.weightKg} ${order.service.unit === 'ITEM' ? 'item' : 'kg'})`,
+    });
+
+    return {
+      success: true,
+      midtransToken: transaction.token,
+      midtransRedirectUrl: transaction.redirectUrl,
+    };
+  } catch (err) {
+    console.error('Error generating Midtrans token for order:', err);
+    return { error: 'Gagal membuat sesi pembayaran Midtrans. Silakan coba lagi.' };
   }
 }
