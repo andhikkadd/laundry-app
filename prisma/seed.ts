@@ -123,8 +123,8 @@ async function main() {
       const endEst = new Date(orderTime.getTime() + duration * 60000);
 
       // Determine status based on probability and how old the order is
-      let status = OrderStatus.PICKED_UP;
-      let paymentStatus = PaymentStatus.PAID;
+      let status: OrderStatus = OrderStatus.PICKED_UP;
+      let paymentStatus: PaymentStatus = PaymentStatus.PAID;
       
       const randCancel = Math.random();
       if (randCancel < 0.05) {
