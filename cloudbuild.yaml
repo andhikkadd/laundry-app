@@ -32,3 +32,6 @@ substitutions:
   _AR_REGION: 'asia-southeast2' # Default for Indonesia / Jakarta
   _AR_REPO: 'bilasin-repo'
   _RUN_REGION: 'asia-southeast2'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
