@@ -118,41 +118,8 @@ export default function OrderForm({ services }: OrderFormProps) {
       if (res?.error) {
         setError(res.error);
       } else if (res?.success && res.orderId) {
-        // If payment is non-cash and we got a Midtrans token, trigger Snap popup
-        if (
-          (paymentMethod === PaymentMethod.QRIS || paymentMethod === PaymentMethod.TRANSFER) &&
-          res.midtransToken
-        ) {
-          if (window.snap) {
-            window.snap.pay(res.midtransToken, {
-              onSuccess: function (result: any) {
-                console.log('Midtrans Snap payment success:', result);
-                router.push(`/admin/orders/${res.orderId}`);
-              },
-              onPending: function (result: any) {
-                console.log('Midtrans Snap payment pending:', result);
-                router.push(`/admin/orders/${res.orderId}`);
-              },
-              onError: function (result: any) {
-                console.error('Midtrans Snap payment error:', result);
-                setError('Pembayaran Midtrans gagal. Silakan hubungi admin.');
-                router.push(`/admin/orders/${res.orderId}`);
-              },
-              onClose: function () {
-                console.log('Midtrans Snap modal closed');
-                router.push(`/admin/orders/${res.orderId}`);
-              },
-            });
-          } else if (res.midtransRedirectUrl) {
-            // Fallback if Snap JS is not loaded yet
-            window.location.href = res.midtransRedirectUrl;
-          } else {
-            router.push(`/admin/orders/${res.orderId}`);
-          }
-        } else {
-          // If cash or unpaid, go straight to the invoice receipt page
-          router.push(`/admin/orders/${res.orderId}`);
-        }
+        // Go straight to the invoice receipt page. The customer will pay from their phone.
+        router.push(`/admin/orders/${res.orderId}`);
       }
     });
   };

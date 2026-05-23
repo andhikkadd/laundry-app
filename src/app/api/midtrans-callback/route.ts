@@ -31,14 +31,20 @@ export async function POST(request: Request) {
       console.warn('Midtrans Server Key is not set in environment. Skipping signature verification (dangerous for production).');
     }
 
+    // Midtrans might return order_id with appended timestamp (LDY-YYYYMMDD-XXXX-TIMESTAMP)
+    let baseOrderId = order_id;
+    if (order_id.includes('-') && order_id.split('-').length > 3) {
+      baseOrderId = order_id.split('-').slice(0, 3).join('-');
+    }
+
     // Find the order
     let order = await prisma.order.findUnique({
-      where: { orderCode: order_id },
+      where: { orderCode: baseOrderId },
     });
 
     if (!order) {
       order = await prisma.order.findUnique({
-        where: { id: order_id },
+        where: { id: baseOrderId },
       });
     }
 

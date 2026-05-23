@@ -333,26 +333,45 @@ export async function createOrder(data: {
       },
     });
 
-    // 9. Initialize Midtrans Transaction for QRIS / Transfer
+    // 9. Initialize Midtrans Transaction for QRIS / Transfer and Cache it
     let midtransToken = null;
     let midtransRedirectUrl = null;
 
     if (data.paymentMethod === PaymentMethod.QRIS || data.paymentMethod === PaymentMethod.TRANSFER) {
       try {
         const transaction = await createMidtransTransaction({
-          orderId: orderCode, // Send the readable order code (e.g. LDY-xxxx) as order ID
+          orderId: `${orderCode}-${Date.now()}`, // Send the readable order code with timestamp suffix
           grossAmount: totalPrice,
           customerName: customer.name,
           customerPhone: customer.phone || undefined,
-          serviceName: `${service.name} Laundry (${data.weightKg} kg)`,
+          serviceName: `${service.name} Laundry (${data.weightKg} ${service.unit === 'ITEM' ? 'item' : 'kg'})`,
+          finishUrl: `${process.env.APP_URL || 'http://localhost:3000'}/track/${orderCode}`,
         });
 
         midtransToken = transaction.token;
         midtransRedirectUrl = transaction.redirectUrl;
+
+        // Cache the token so user side can just reuse it
+        if (midtransToken) {
+          await prisma.appSetting.upsert({
+            where: { key: `snap_token_${orderCode}` },
+            update: { value: midtransToken },
+            create: { key: `snap_token_${orderCode}`, value: midtransToken },
+          });
+          if (midtransRedirectUrl) {
+            await prisma.appSetting.upsert({
+              where: { key: `snap_url_${orderCode}` },
+              update: { value: midtransRedirectUrl },
+              create: { key: `snap_url_${orderCode}`, value: midtransRedirectUrl },
+            });
+          }
+        }
       } catch (err) {
         console.error('Error generating Midtrans token:', err);
       }
     }
+
+
 
     revalidatePath('/admin/dashboard');
     revalidatePath('/admin/orders');
@@ -361,8 +380,6 @@ export async function createOrder(data: {
       success: true,
       orderCode,
       orderId: order.id,
-      midtransToken,
-      midtransRedirectUrl,
     };
   } catch (err) {
     console.error('Error creating order:', err);
@@ -621,13 +638,33 @@ export async function getMidtransTokenForOrder(orderCode: string) {
       return { success: true, alreadyPaid: true };
     }
 
-    const transaction = await createMidtransTransaction({
+    // Try to get cached token first
+    const cachedToken = await prisma.appSetting.findUnique({ where: { key: `snap_token_${order.orderCode}` } });
+    const cachedUrl = await prisma.appSetting.findUnique({ where: { key: `snap_url_${order.orderCode}` } });
+
+    if (cachedToken?.value) {
+      return {
+        success: true,
+        midtransToken: cachedToken.value,
+        midtransRedirectUrl: cachedUrl?.value || null,
+      };
+    }
+
+    // Fallback if not found (legacy orders)
+    let transaction = await createMidtransTransaction({
       orderId: order.orderCode,
       grossAmount: order.totalPrice,
       customerName: order.customer.name,
       customerPhone: order.customer.phone || undefined,
       serviceName: `${order.service.name} Laundry (${order.weightKg} ${order.service.unit === 'ITEM' ? 'item' : 'kg'})`,
+      finishUrl: `${process.env.APP_URL || 'http://localhost:3000'}/track/${order.orderCode}`,
     });
+
+
+
+    if (!transaction.token && !transaction.redirectUrl) {
+      return { error: 'Gagal membuat transaksi dengan payment gateway (Midtrans).' };
+    }
 
     return {
       success: true,

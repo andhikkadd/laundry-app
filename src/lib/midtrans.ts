@@ -4,6 +4,7 @@ export interface MidtransTransactionDetails {
   customerName: string;
   customerPhone?: string;
   serviceName: string;
+  finishUrl?: string;
 }
 
 export async function createMidtransTransaction({
@@ -12,6 +13,7 @@ export async function createMidtransTransaction({
   customerName,
   customerPhone,
   serviceName,
+  finishUrl,
 }: MidtransTransactionDetails) {
   const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
   const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
@@ -49,6 +51,12 @@ export async function createMidtransTransaction({
       },
     ],
   };
+
+  if (finishUrl) {
+    (payload as any).callbacks = {
+      finish: finishUrl,
+    };
+  }
 
   try {
     const response = await fetch(baseUrl, {

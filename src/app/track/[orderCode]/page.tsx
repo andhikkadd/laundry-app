@@ -22,6 +22,8 @@ export default async function TrackDetailPage({ params }: TrackDetailProps) {
       orderCode={orderCode}
       initialOrder={trackingData.order}
       initialQueuePosition={trackingData.queuePosition}
+      midtransClientKey={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || ''}
+      isProduction={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true'}
     />
   );
 }

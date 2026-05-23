@@ -20,6 +20,7 @@ import {
   Download,
   ArrowUpRight,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 type ReceiptLine =
   | { type: 'text'; content: string; align?: 'center' | 'left'; bold?: boolean }
@@ -50,10 +51,10 @@ export default function OrderDetailActions({
     (order.paymentMethod === 'QRIS' ||
       order.paymentMethod === 'TRANSFER' ||
       order.paymentMethod === 'EWALLET') &&
-    order.paymentStatus === 'UNPAID';
+    order.paymentStatus === 'UNPAID' &&
+    order.status !== OrderStatus.CANCELLED;
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
 
   // Custom Status Modal State
@@ -63,8 +64,6 @@ export default function OrderDetailActions({
   const [selectedMachine, setSelectedMachine] = useState<number | null>(null);
 
   const handleStatusChange = (nextStatus: OrderStatus) => {
-    setError(null);
-    setSuccessMsg(null);
     setStatusToChange(nextStatus);
     setStatusNote('');
 
@@ -87,8 +86,6 @@ export default function OrderDetailActions({
 
   const confirmStatusChange = () => {
     if (!statusToChange) return;
-    setError(null);
-    setSuccessMsg(null);
     setShowStatusModal(false);
 
     startTransition(async () => {
@@ -99,9 +96,9 @@ export default function OrderDetailActions({
         selectedMachine || undefined
       );
       if (res?.error) {
-        setError(res.error);
+        showToast(res.error, 'error');
       } else {
-        setSuccessMsg(`Status berhasil diubah menjadi ${statusToChange.toLowerCase().replace('_', ' ')}`);
+        showToast(`Status berhasil diubah menjadi ${statusToChange.toLowerCase().replace('_', ' ')}`, 'success');
         router.refresh();
       }
     });
@@ -109,14 +106,12 @@ export default function OrderDetailActions({
 
   const handleMarkAsPaid = () => {
     if (confirm('Apakah Anda yakin ingin menandai pesanan ini sebagai DIBAYAR?')) {
-      setError(null);
-      setSuccessMsg(null);
       startTransition(async () => {
         const res = await markPaymentAsPaid(order.id, order.paymentMethod);
         if (res?.error) {
-          setError(res.error);
+          showToast(res.error, 'error');
         } else {
-          setSuccessMsg('Pembayaran berhasil ditandai sebagai DIBAYAR!');
+          showToast('Pembayaran berhasil ditandai sebagai DIBAYAR!', 'success');
           router.refresh();
         }
       });
@@ -128,7 +123,7 @@ export default function OrderDetailActions({
   const copyWhatsAppMessage = () => {
     const msg = `Halo ${order.customer.name}, laundry Anda dengan kode order *${order.orderCode}* sudah SIAP untuk diambil di outlet *${settings.outlet_name || 'Bilasin'}*. Terima kasih.`;
     navigator.clipboard.writeText(msg);
-    alert('Pesan WhatsApp disalin ke clipboard!');
+    showToast('Pesan WhatsApp disalin ke clipboard!', 'success');
   };
 
   const downloadReceiptAsImage = () => {
@@ -235,9 +230,10 @@ export default function OrderDetailActions({
         link.download = `struk-${order.orderCode}.png`;
         link.href = dataUrl;
         link.click();
+        showToast('Struk berhasil diunduh.', 'success');
       } catch (err) {
         console.error('Error generating image', err);
-        alert('Gagal mendownload struk sebagai gambar.');
+        showToast('Gagal mendownload struk sebagai gambar.', 'error');
       }
     };
   };
@@ -246,18 +242,6 @@ export default function OrderDetailActions({
     <div className="grid gap-6 lg:grid-cols-3">
       {/* Detail information (Left side) */}
       <div className="lg:col-span-2 space-y-6">
-        
-        {/* Status Alert and Messages */}
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-600">
-            {error}
-          </div>
-        )}
-        {successMsg && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-600">
-            {successMsg}
-          </div>
-        )}
 
         {/* Info card */}
         <div className="rounded-xl border border-border-brand bg-white p-6 shadow-xs space-y-6">
@@ -455,7 +439,7 @@ export default function OrderDetailActions({
             )}
 
             {/* Manual payment confirmation */}
-            {order.paymentStatus === 'UNPAID' && (
+            {order.paymentStatus === 'UNPAID' && order.paymentMethod === 'CASH' && (
               <button
                 onClick={handleMarkAsPaid}
                 disabled={isPending}

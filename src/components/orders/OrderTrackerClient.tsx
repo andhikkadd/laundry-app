@@ -9,36 +9,40 @@ import OrderTimeline from '@/components/orders/OrderTimeline';
 import { getTrackingData, getMidtransTokenForOrder, markPaymentAsPaid } from '@/actions/orders';
 import { formatPrice, formatDateTime, getRemainingTimeText } from '@/lib/format';
 import { OrderStatus } from '@prisma/client';
+import { useToast } from '@/components/ui/Toast';
 
 interface OrderTrackerClientProps {
   orderCode: string;
   initialOrder: any;
   initialQueuePosition: number;
+  midtransClientKey: string;
+  isProduction: boolean;
 }
 
 export default function OrderTrackerClient({
   orderCode,
   initialOrder,
   initialQueuePosition,
+  midtransClientKey,
+  isProduction,
 }: OrderTrackerClientProps) {
   const [order, setOrder] = useState(initialOrder);
   const [queuePosition, setQueuePosition] = useState(initialQueuePosition);
   const [isPaying, setIsPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   // Load Midtrans Snap client-side library (optional, only if configured)
   useEffect(() => {
-    const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
-    if (!clientKey) return; // Skip if Midtrans is not configured
+    if (!midtransClientKey) return; // Skip if Midtrans is not configured
 
     try {
-      const snapUrl = process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true'
+      const snapUrl = isProduction
         ? 'https://app.midtrans.com/snap/snap.js'
         : 'https://app.sandbox.midtrans.com/snap/snap.js';
         
       const script = document.createElement('script');
       script.src = snapUrl;
-      script.setAttribute('data-client-key', clientKey);
+      script.setAttribute('data-client-key', midtransClientKey);
       script.async = true;
       script.onerror = () => {
         console.warn('Midtrans Snap SDK failed to load.');
@@ -51,15 +55,14 @@ export default function OrderTrackerClient({
     } catch {
       console.warn('Failed to initialize Midtrans Snap.');
     }
-  }, []);
+  }, [midtransClientKey, isProduction]);
 
   const handleOnlinePayment = async () => {
     setIsPaying(true);
-    setPaymentError(null);
     try {
       const res = await getMidtransTokenForOrder(order.orderCode);
       if (res.error) {
-        setPaymentError(res.error);
+        showToast(res.error, 'error');
         setIsPaying(false);
         return;
       }
@@ -98,23 +101,24 @@ export default function OrderTrackerClient({
           },
           onError: (result: any) => {
             console.error('Payment error:', result);
-            setPaymentError('Pembayaran gagal atau dibatalkan. Silakan coba lagi.');
+            showToast('Pembayaran gagal atau dibatalkan. Silakan coba lagi.', 'error');
             setIsPaying(false);
           },
           onClose: () => {
             console.log('Payment modal closed');
+            showToast('Anda menutup jendela pembayaran.', 'info');
             setIsPaying(false);
           }
         });
       } else if (res.midtransRedirectUrl) {
         window.location.href = res.midtransRedirectUrl;
       } else {
-        setPaymentError('Kunci klien Midtrans belum terpasang atau skrip Snap belum termuat.');
+        showToast('Kunci klien Midtrans belum terpasang atau skrip Snap belum termuat.', 'error');
         setIsPaying(false);
       }
     } catch (err) {
       console.error('Error initiating payment:', err);
-      setPaymentError('Terjadi kesalahan koneksi. Silakan coba lagi.');
+      showToast('Terjadi kesalahan koneksi. Silakan coba lagi.', 'error');
       setIsPaying(false);
     }
   };
@@ -137,6 +141,11 @@ export default function OrderTrackerClient({
   }, [orderCode]);
 
   const remainingTimeText = getRemainingTimeText(order.estimatedEndAt, order.status);
+  
+  const isCashlessUnpaid = 
+    (order.paymentMethod === 'QRIS' || order.paymentMethod === 'TRANSFER' || order.paymentMethod === 'EWALLET') && 
+    order.paymentStatus === 'UNPAID' && 
+    order.status !== OrderStatus.CANCELLED;
 
   // Helper to determine step indexes for tracking progress
   const getStepIndex = (status: OrderStatus) => {
@@ -156,7 +165,8 @@ export default function OrderTrackerClient({
     (order.paymentMethod === 'QRIS' ||
       order.paymentMethod === 'TRANSFER' ||
       order.paymentMethod === 'EWALLET') &&
-    order.paymentStatus === 'UNPAID';
+    order.paymentStatus === 'UNPAID' &&
+    order.status !== OrderStatus.CANCELLED;
 
   const steps = [
     {
@@ -303,40 +313,55 @@ export default function OrderTrackerClient({
           </div>
 
           {/* Quick Metrics Grid */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            {/* Remaining Time Box */}
-            <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
-                <Clock size={16} className="text-emerald-brand" />
+          {!isCashlessUnpaid ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {/* Remaining Time Box */}
+              <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
+                  <Clock size={16} className="text-emerald-brand" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Sisa Waktu Pengerjaan</span>
+                <span className="mt-1 text-xs sm:text-sm font-extrabold text-navy-dark">
+                  {remainingTimeText}
+                </span>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Sisa Waktu Pengerjaan</span>
-              <span className="mt-1 text-xs sm:text-sm font-extrabold text-navy-dark">
-                {remainingTimeText}
-              </span>
-            </div>
 
-            {/* Estimated Finish Date */}
-            <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
-                <Calendar size={16} className="text-emerald-brand" />
+              {/* Estimated Finish Date */}
+              <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
+                  <Calendar size={16} className="text-emerald-brand" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimasi Selesai</span>
+                <span className="mt-1 text-[10px] sm:text-[11px] font-bold text-navy-dark leading-tight">
+                  {formatDateTime(order.estimatedEndAt)}
+                </span>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Estimasi Selesai</span>
-              <span className="mt-1 text-[10px] sm:text-[11px] font-bold text-navy-dark leading-tight">
-                {formatDateTime(order.estimatedEndAt)}
-              </span>
-            </div>
 
-            {/* Queue Number Box */}
-            <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
-                <BadgeDollarSign size={16} className="text-emerald-brand" />
+              {/* Queue Number Box */}
+              <div className="rounded-xl border border-border-brand bg-white p-4 sm:p-5 shadow-xs text-center flex flex-col justify-center items-center">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-light-bg text-navy-dark border border-border-brand mb-2">
+                  <BadgeDollarSign size={16} className="text-emerald-brand" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Nomor Antrean Kerja</span>
+                <span className="mt-0.5 text-lg sm:text-xl font-black text-emerald-brand">
+                  #{order.queueNumber.toString().padStart(3, '0')}
+                </span>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-text-muted uppercase tracking-wider">Nomor Antrean Kerja</span>
-              <span className="mt-0.5 text-lg sm:text-xl font-black text-emerald-brand">
-                #{order.queueNumber.toString().padStart(3, '0')}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-5 shadow-xs flex flex-col justify-center items-center text-center space-y-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 mb-1">
+                <Clock size={20} className="text-amber-600" />
+              </div>
+              <span className="text-sm font-bold text-amber-800">
+                Menunggu Pembayaran
+              </span>
+              <span className="text-xs font-semibold text-amber-700/80">
+                Pesanan akan masuk ke estimasi antrean kerja setelah pembayaran QRIS diselesaikan.
               </span>
             </div>
-          </div>
+          )}
+
 
           {/* Timeline and Details section */}
           <div className="grid gap-4 md:gap-6 md:grid-cols-5">
@@ -415,11 +440,7 @@ export default function OrderTrackerClient({
                         )}
                       </button>
 
-                      {paymentError && (
-                        <p className="text-[10px] text-rose-600 font-semibold bg-rose-50 p-2 rounded-lg border border-rose-100 mt-1">
-                          {paymentError}
-                        </p>
-                      )}
+
 
                       <div className="flex justify-center items-center gap-2 pt-1 opacity-70">
                         <span className="text-[9px] text-text-muted font-bold">Securely processed by</span>
